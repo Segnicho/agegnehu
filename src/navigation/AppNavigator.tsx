@@ -10,6 +10,7 @@ import {
   CreatePostScreen,
   PostDetailsScreen,
 } from '../screens';
+import { AuthScreen } from '../screens/AuthScreen';
 import { colors } from '../theme';
 import { MainTabParamList, RootStackParamList } from '../types/navigation';
 
@@ -63,6 +64,11 @@ export const AppNavigator = () => {
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="MainTabs" component={TabNavigator} />
         <Stack.Screen name="PostDetails" component={PostDetailsScreen} />
+        <Stack.Screen 
+          name="Auth" 
+          component={AuthScreen} 
+          options={{ presentation: 'modal' }} 
+        />
       </Stack.Navigator>
     </NavigationContainer>
   );

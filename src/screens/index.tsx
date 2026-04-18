@@ -37,19 +37,38 @@ import { Input } from '../components/Input';
 import { colors, typography } from '../theme';
 import { usePosts } from '../hooks/usePosts';
 import { usePost } from '../hooks/usePost';
+import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../utils/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { PostType, CATEGORIES, LOCATIONS } from '../types/post';
 import { RootStackParamList } from '../types/navigation';
 
 // --- Home Screen ---
+import { LogOut, User as UserIcon } from 'lucide-react-native';
+
 export const HomeScreen = () => {
   const [activeTab, setActiveTab] = useState<PostType>('lost');
   const { posts, loading, refresh } = usePosts(activeTab);
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { isAuthenticated, user, signOut } = useAuth();
+
+  const handleSignOut = () => {
+    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Sign Out', style: 'destructive', onPress: signOut },
+    ]);
+  };
 
   const renderHeader = () => (
     <View style={styles.header}>
-      <Text variant="displaySmall" style={styles.title}>አገኘሁ</Text>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+        <Text variant="displaySmall">አገኘሁ</Text>
+        {isAuthenticated && (
+          <TouchableOpacity onPress={handleSignOut} style={styles.iconButton}>
+            <LogOut size={20} color={colors.secondary} />
+          </TouchableOpacity>
+        )}
+      </View>
       <View style={styles.tabContainer}>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'lost' && styles.activeTab]}
@@ -112,6 +131,16 @@ export const PostDetailsScreen = () => {
   const navigation = useNavigation();
   const { post, loading } = usePost(route.params.postId);
 
+  const [hasReported, setHasReported] = useState(false);
+
+  React.useEffect(() => {
+    const checkReportStatus = async () => {
+      const reported = await AsyncStorage.getItem(`reported_${route.params.postId}`);
+      if (reported) setHasReported(true);
+    };
+    if (route.params.postId) checkReportStatus();
+  }, [route.params.postId]);
+
   if (loading) {
     return (
       <View style={[styles.container, styles.centered]}>
@@ -156,26 +185,37 @@ export const PostDetailsScreen = () => {
   };
 
   const handleReport = () => {
+    if (hasReported) {
+      Alert.alert('Info', 'You have already reported this post.');
+      return;
+    }
+
     Alert.alert(
       'Report Post',
-      'Are you sure you want to report this post?',
+      'Select a reason for reporting this post:',
       [
+        { text: 'Spam', onPress: () => submitReport('Spam') },
+        { text: 'Inappropriate', onPress: () => submitReport('Inappropriate Content') },
+        { text: 'Misleading', onPress: () => submitReport('Misleading/Scam') },
+        { text: 'Other', onPress: () => submitReport('Other') },
         { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Report',
-          style: 'destructive',
-          onPress: async () => {
-            const { error } = await supabase.from('reports').insert({
-              post_id: post.id,
-              reason: 'User reported from app',
-            });
-            if (!error) {
-              Alert.alert('Thank you', 'The post has been reported and will be reviewed.');
-            }
-          },
-        },
       ]
     );
+  };
+
+  const submitReport = async (reason: string) => {
+    const { error } = await supabase.from('reports').insert({
+      post_id: post.id,
+      reason: reason,
+    });
+    
+    if (!error) {
+      await AsyncStorage.setItem(`reported_${post.id}`, 'true');
+      setHasReported(true);
+      Alert.alert('Thank you', 'The post has been reported and will be reviewed.');
+    } else {
+      Alert.alert('Error', 'Failed to submit report. Please try again.');
+    }
   };
 
   return (
@@ -242,9 +282,19 @@ export const PostDetailsScreen = () => {
             )}
           </View>
 
-          <TouchableOpacity onPress={handleReport} style={styles.reportButton}>
-            <AlertTriangle size={16} color={colors.outline} />
-            <Text variant="labelMedium" color="outline" style={styles.reportText}>Report Post</Text>
+          <TouchableOpacity 
+            onPress={handleReport} 
+            style={[styles.reportButton, hasReported && { opacity: 0.5 }]}
+            disabled={hasReported}
+          >
+            <AlertTriangle size={16} color={hasReported ? colors.outline : colors.error} />
+            <Text 
+              variant="labelMedium" 
+              color={hasReported ? "outline" : "error"} 
+              style={styles.reportText}
+            >
+              {hasReported ? 'Post Reported' : 'Report Post'}
+            </Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -349,6 +399,7 @@ import { useStorage } from '../hooks/useStorage';
 export const CreatePostScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { uploadImage, uploading: imageUploading } = useStorage();
+  const { isAuthenticated, user } = useAuth();
   
   const [type, setType] = useState<PostType>('lost');
   const [title, setTitle] = useState('');
@@ -402,6 +453,7 @@ export const CreatePostScreen = () => {
         contact_phone: phone,
         whatsapp_phone: whatsapp || phone,
         status: 'active',
+        user_id: user?.id,
       });
 
       if (error) throw error;
@@ -428,6 +480,29 @@ export const CreatePostScreen = () => {
     setWhatsapp('');
     setImage(null);
   };
+
+  if (!isAuthenticated) {
+    return (
+      <SafeAreaView style={[styles.container, styles.centered]} edges={['top']}>
+        <View style={{ padding: 32, alignItems: 'center' }}>
+          <View style={styles.authIconContainer}>
+             <PlusCircle size={64} color={colors.outlineVariant} />
+          </View>
+          <Text variant="headlineSmall" style={{ textAlign: 'center', marginBottom: 12 }}>
+            Sign in to Post
+          </Text>
+          <Text variant="bodyLarge" color="onSurfaceVariant" style={{ textAlign: 'center', marginBottom: 32 }}>
+            You need to be logged in to help others by posting lost or found items.
+          </Text>
+          <Button 
+            title="Sign In / Sign Up" 
+            onPress={() => navigation.navigate('Auth')} 
+            style={{ width: '100%' }}
+          />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -557,7 +632,15 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   title: {
-    marginBottom: 24,
+    marginBottom: 0,
+  },
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.surfaceContainerLow,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   tabContainer: {
     flexDirection: 'row',
@@ -755,5 +838,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
+  },
+  authIconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: colors.surfaceContainerLow,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
   },
 });
