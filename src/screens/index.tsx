@@ -11,6 +11,8 @@ import {
   Share,
   Alert,
   TextInput as RNTextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -288,12 +290,21 @@ export const PostDetailsScreen = () => {
 // --- Search Screen ---
 export const SearchScreen = () => {
   const [query, setQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [location, setLocation] = useState<string | undefined>();
   const [category, setCategory] = useState<string | undefined>();
-  const { posts, loading, refresh } = usePosts(undefined, { query, location, category });
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(query);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  const { posts, loading, refresh } = usePosts(undefined, { query: debouncedQuery, location, category });
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
-  const renderHeader = () => (
+  const renderHeader = React.useMemo(() => (
     <View style={styles.header}>
       <Text variant="displaySmall" style={styles.title}>Search</Text>
       
@@ -344,7 +355,7 @@ export const SearchScreen = () => {
         ))}
       </ScrollView>
     </View>
-  );
+  ), [query, location, category]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -464,8 +475,15 @@ export const CreatePostScreen = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <ScrollView contentContainerStyle={styles.formContainer}>
-        <Text variant="headlineLarge" style={styles.formTitle}>Post an Item</Text>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1 }}
+      >
+        <ScrollView 
+          contentContainerStyle={styles.formContainer}
+          keyboardShouldPersistTaps="handled"
+        >
+          <Text variant="headlineLarge" style={styles.formTitle}>Post an Item</Text>
         
         <View style={styles.tabContainer}>
           <TouchableOpacity
@@ -575,7 +593,8 @@ export const CreatePostScreen = () => {
           loading={submitting || imageUploading}
           style={styles.submitButton}
         />
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
