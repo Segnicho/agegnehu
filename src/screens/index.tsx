@@ -30,6 +30,7 @@ import {
   PlusCircle,
   Camera,
   X,
+  Send,
 } from 'lucide-react-native';
 
 import { Text } from '../components/Text';
@@ -117,13 +118,18 @@ export const PostDetailsScreen = () => {
   const { post, loading } = usePost(route.params.postId);
 
   const [hasReported, setHasReported] = useState(false);
+  const [editToken, setEditToken] = useState<string | null>(null);
 
   React.useEffect(() => {
-    const checkReportStatus = async () => {
-      const reported = await AsyncStorage.getItem(`reported_${route.params.postId}`);
+    const checkStatus = async () => {
+      const [reported, token] = await Promise.all([
+        AsyncStorage.getItem(`reported_${route.params.postId}`),
+        AsyncStorage.getItem(`edit_token_${route.params.postId}`),
+      ]);
       if (reported) setHasReported(true);
+      if (token) setEditToken(token);
     };
-    if (route.params.postId) checkReportStatus();
+    if (route.params.postId) checkStatus();
   }, [route.params.postId]);
 
   if (loading) {
@@ -152,10 +158,10 @@ export const PostDetailsScreen = () => {
     }
   };
 
-  const handleWhatsApp = () => {
-    if (post.whatsapp_phone) {
-      const message = `Helllo, I am contacting you regarding your post "${post.title}" on Agenehu.`;
-      Linking.openURL(`whatsapp://send?phone=${post.whatsapp_phone}&text=${encodeURIComponent(message)}`);
+  const handleTelegram = () => {
+    if (post.telegram_username) {
+      const username = post.telegram_username.replace('@', '');
+      Linking.openURL(`tg://resolve?domain=${username}`);
     }
   };
 
@@ -201,6 +207,63 @@ export const PostDetailsScreen = () => {
     } else {
       Alert.alert('Error', 'Failed to submit report. Please try again.');
     }
+  };
+
+  const handleResolve = async () => {
+    if (!editToken) return;
+
+    Alert.alert(
+      'Resolve Post',
+      'Are you sure you want to mark this post as resolved? It will be moved to the resolved section.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Resolve', 
+          onPress: async () => {
+            const { error } = await supabase
+              .from('posts')
+              .update({ status: 'resolved' })
+              .match({ id: post.id, edit_token: editToken });
+
+            if (!error) {
+              Alert.alert('Success', 'Post marked as resolved.');
+              (navigation as any).goBack();
+            } else {
+              Alert.alert('Error', 'Failed to resolve post.');
+            }
+          } 
+        },
+      ]
+    );
+  };
+
+  const handleDelete = async () => {
+    if (!editToken) return;
+
+    Alert.alert(
+      'Delete Post',
+      'Are you sure you want to permanently delete this post? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete', 
+          style: 'destructive',
+          onPress: async () => {
+            const { error } = await supabase
+              .from('posts')
+              .delete()
+              .match({ id: post.id, edit_token: editToken });
+
+            if (!error) {
+              Alert.alert('Success', 'Post deleted.');
+              (navigation as any).goBack();
+            } else {
+              Alert.alert('Error', 'Failed to delete post.');
+            }
+          } 
+        },
+      ]
+    );
   };
 
   return (
@@ -257,10 +320,10 @@ export const PostDetailsScreen = () => {
                 variant="primary"
               />
             )}
-            {post.whatsapp_phone && (
+            {post.telegram_username && (
               <Button
-                title="WhatsApp"
-                onPress={handleWhatsApp}
+                title="Telegram"
+                onPress={handleTelegram}
                 style={styles.actionButton}
                 variant="secondary"
               />
@@ -281,6 +344,39 @@ export const PostDetailsScreen = () => {
               {hasReported ? 'Post Reported' : 'Report Post'}
             </Text>
           </TouchableOpacity>
+
+          {editToken && post.status !== 'resolved' && (
+            <View style={styles.managementSection}>
+              <View style={styles.divider} />
+              <Text variant="labelLarge" style={styles.managementTitle}>Owner Actions</Text>
+              <View style={styles.actionRow}>
+                <Button
+                  title="Mark as Resolved"
+                  onPress={handleResolve}
+                  style={[styles.actionButton, { flex: 1.5 }]}
+                  variant="primary"
+                />
+                <Button
+                  title="Delete"
+                  onPress={handleDelete}
+                  style={styles.actionButton}
+                  variant="outline"
+                />
+              </View>
+            </View>
+          )}
+
+          {editToken && post.status === 'resolved' && (
+            <View style={styles.managementSection}>
+              <View style={styles.divider} />
+              <Button
+                title="Delete Resolved Post"
+                onPress={handleDelete}
+                variant="outline"
+                style={{ marginTop: 8 }}
+              />
+            </View>
+          )}
         </View>
       </ScrollView>
     </View>
@@ -400,7 +496,7 @@ export const CreatePostScreen = () => {
   const [category, setCategory] = useState(CATEGORIES[0]);
   const [location, setLocation] = useState(LOCATIONS[0]);
   const [phone, setPhone] = useState('');
-  const [whatsapp, setWhatsapp] = useState('');
+  const [telegram, setTelegram] = useState('');
   const [image, setImage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -418,8 +514,13 @@ export const CreatePostScreen = () => {
   };
 
   const handleSubmit = async () => {
-    if (!title || !description || !phone) {
-      Alert.alert('Error', 'Please fill in all required fields (Title, Description, Phone).');
+    if (!title || !description) {
+      Alert.alert('Error', 'Please fill in Title and Description.');
+      return;
+    }
+
+    if (!phone && !telegram) {
+      Alert.alert('Error', 'Please provide either a Phone Number or a Telegram Username.');
       return;
     }
 
@@ -435,7 +536,9 @@ export const CreatePostScreen = () => {
         }
       }
 
-      const { error } = await supabase.from('posts').insert({
+      const token = Math.random().toString(36).substring(2, 12) + Math.random().toString(36).substring(2, 12);
+
+      const { data, error } = await supabase.from('posts').insert({
         type,
         title,
         description,
@@ -443,12 +546,17 @@ export const CreatePostScreen = () => {
         location,
         event_date: new Date().toISOString().split('T')[0], // Use today's date for MVP
         image_url: imageUrl,
-        contact_phone: phone,
-        whatsapp_phone: whatsapp || phone,
+        contact_phone: phone || null,
+        telegram_username: telegram || null,
         status: 'active',
-      });
+        edit_token: token,
+      }).select();
 
       if (error) throw error;
+
+      if (data && data[0]) {
+        await AsyncStorage.setItem(`edit_token_${data[0].id}`, token);
+      }
 
       Alert.alert('Success', 'Post created successfully!', [
         { text: 'OK', onPress: () => {
@@ -469,18 +577,19 @@ export const CreatePostScreen = () => {
     setCategory(CATEGORIES[0]);
     setLocation(LOCATIONS[0]);
     setPhone('');
-    setWhatsapp('');
+    setTelegram('');
     setImage(null);
   };
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
       >
         <ScrollView 
-          contentContainerStyle={styles.formContainer}
+          contentContainerStyle={[styles.formContainer, { flexGrow: 1 }]}
           keyboardShouldPersistTaps="handled"
         >
           <Text variant="headlineLarge" style={styles.formTitle}>Post an Item</Text>
@@ -580,11 +689,11 @@ export const CreatePostScreen = () => {
         />
 
         <Input
-          label="WhatsApp Number (Optional)"
-          placeholder="0911..."
-          keyboardType="phone-pad"
-          value={whatsapp}
-          onChangeText={setWhatsapp}
+          label="Telegram Username"
+          placeholder="@username"
+          value={telegram}
+          onChangeText={setTelegram}
+          autoCapitalize="none"
         />
 
         <Button
@@ -815,6 +924,19 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceContainerLow,
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 24,
+  },
+  managementSection: {
+    marginTop: 24,
+    paddingTop: 8,
+  },
+  managementTitle: {
+    marginBottom: 16,
+    color: colors.onSurface,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: colors.outlineVariant + '40',
     marginBottom: 24,
   },
 });

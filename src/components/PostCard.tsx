@@ -32,10 +32,17 @@ export const PostCard: React.FC<PostCardProps> = ({ post, onPress }) => {
             <Text variant="headlineSmall" numberOfLines={1} style={styles.title}>
               {post.title}
             </Text>
-            <View style={[styles.badge, { backgroundColor: statusColor + '20' }]}>
-              <Text variant="labelMedium" color={statusColor} style={styles.badgeText}>
-                {post.type.toUpperCase()}
-              </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              {post.status === 'resolved' && (
+                <View style={[styles.badge, { backgroundColor: colors.outlineVariant + '40', marginRight: 8 }]}>
+                  <Text variant="labelMedium" color="outline">RESOLVED</Text>
+                </View>
+              )}
+              <View style={[styles.badge, { backgroundColor: statusColor + '20' }]}>
+                <Text variant="labelMedium" color={statusColor} style={styles.badgeText}>
+                  {post.type.toUpperCase()}
+                </Text>
+              </View>
             </View>
           </View>
 

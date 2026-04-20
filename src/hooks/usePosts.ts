@@ -13,7 +13,7 @@ export const usePosts = (type?: PostType, filter?: { location?: string; category
       let query = supabase
         .from('posts')
         .select('*')
-        .eq('status', 'active')
+        .in('status', ['active', 'resolved'])
         .order('created_at', { ascending: false });
 
       if (type) {

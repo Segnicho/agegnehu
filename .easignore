@@ -1,0 +1,26 @@
+# EAS Build ignore file
+# Use this to exclude files from being uploaded to EAS Build
+
+node_modules/
+.expo/
+dist/
+web-build/
+/ios
+/android
+
+# Exclude large local folders that are not part of the active app code
+stitch_lost_found_ui/
+supabase_schema.sql
+DESIGN.md
+README.md
+
+# Build artifacts
+*.apk
+*.aab
+*.zip
+*.tar.gz
+
+# Env files (sensitive ones - public ones should be in eas.json)
+.env
+.env.local
+.env.*.local

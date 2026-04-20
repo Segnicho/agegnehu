@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "አገኘሁ",
-    "slug": "agenehu",
+    "slug": "agegnehu",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -21,10 +21,16 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.agegnehu.app"
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "8f954bc4-91eb-4f84-ac44-21267724a77c"
+      }
     }
   }
 }

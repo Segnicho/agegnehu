@@ -1,5 +1,5 @@
 export type PostType = 'lost' | 'found';
-export type PostStatus = 'active' | 'reported' | 'hidden';
+export type PostStatus = 'active' | 'reported' | 'hidden' | 'resolved';
 
 export interface Post {
   id: string;
@@ -10,9 +10,10 @@ export interface Post {
   location: string;
   event_date: string;
   image_url: string | null;
-  contact_phone: string;
-  whatsapp_phone: string;
+  contact_phone: string | null;
+  telegram_username: string | null;
   status: PostStatus;
+  edit_token?: string;
   created_at: string;
 }
 
